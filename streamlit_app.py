@@ -17,7 +17,23 @@ if "cwd" not in st.session_state:
 # Show current directory
 st.info(f"📂 Current Directory: {st.session_state.cwd}")
 
-# Input
+# ===== Button to install tmate =====
+if st.button("Install tmate"):
+    try:
+        st.info("Installing tmate... (requires sudo, you may be prompted for password)")
+        result = subprocess.run(
+            "sudo apt update && sudo apt install -y tmate",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        output = result.stdout if result.stdout else result.stderr
+        st.code(output, language="bash")
+        st.success("tmate installation finished.")
+    except Exception as e:
+        st.error(f"Failed to install tmate: {e}")
+
+# ===== Terminal input =====
 command = st.text_input("Enter Linux command:")
 
 # Run command
@@ -66,7 +82,6 @@ if st.button("Run Command"):
 
 # Output display
 st.subheader("📄 Terminal Output")
-
 if st.session_state.history:
     for item in reversed(st.session_state.history):
         st.code(f"$ {item['command']}\n{item['output']}", language="bash")
