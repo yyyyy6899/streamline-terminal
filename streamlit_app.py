@@ -1,51 +1,50 @@
 import streamlit as st
 import subprocess
+import os
 
-st.set_page_config(page_title="Web Terminal", layout="wide")
+st.set_page_config(page_title="Code Server Launcher", layout="wide")
 
-st.title("💻 Web Terminal (Linux Commands)")
-st.write("Run Linux commands from your browser (limited access recommended)")
+st.title("💻 Code-Server Web IDE")
+st.write("Install and run code-server on port 7000")
 
-# Store command history
-if "history" not in st.session_state:
-    st.session_state.history = []
+# Store logs
+if "logs" not in st.session_state:
+    st.session_state.logs = ""
 
-# Input box
-command = st.text_input("Enter Linux command:")
+# Install code-server
+if st.button("Install code-server"):
+    try:
+        install_cmd = "curl -fsSL https://code-server.dev/install.sh | sh"
+        result = subprocess.run(install_cmd, shell=True, capture_output=True, text=True)
+        st.session_state.logs += result.stdout + result.stderr
+        st.success("code-server installed successfully")
+    except Exception as e:
+        st.error(str(e))
 
-# Run button
-if st.button("Run Command"):
-    if command.strip() == "":
-        st.warning("Please enter a command")
-    else:
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True
-            )
+# Run code-server
+if st.button("Start code-server (port 7000)"):
+    try:
+        run_cmd = "code-server --bind-addr 0.0.0.0:7000 > code-server.log 2>&1 &"
+        subprocess.run(run_cmd, shell=True)
 
-            output = result.stdout if result.stdout else result.stderr
+        st.success("code-server started on port 7000")
 
-            # Save history
-            st.session_state.history.append({
-                "command": command,
-                "output": output
-            })
+        # Read password file
+        password_cmd = "cat ~/.config/code-server/config.yaml"
+        result = subprocess.run(password_cmd, shell=True, capture_output=True, text=True)
 
-        except Exception as e:
-            st.error(str(e))
+        st.session_state.logs += result.stdout
 
-# Show output
-st.subheader("📄 Output")
+    except Exception as e:
+        st.error(str(e))
 
-if st.session_state.history:
-    for item in reversed(st.session_state.history):
-        st.code(f"$ {item['command']}\n{item['output']}", language="bash")
+# Show logs / password
+st.subheader("📄 Logs & Password Info")
+if st.session_state.logs:
+    st.code(st.session_state.logs, language="bash")
 else:
-    st.write("No commands run yet.")
+    st.write("No logs yet")
 
-# Clear history
-if st.button("Clear History"):
-    st.session_state.history = []
+# Show access info
+st.subheader("🌐 Access Info")
+st.info("Open in browser: http://YOUR_SERVER_IP:7000")
