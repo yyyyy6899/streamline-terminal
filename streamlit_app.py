@@ -2,49 +2,77 @@ import streamlit as st
 import subprocess
 import os
 
-st.set_page_config(page_title="Code Server Launcher", layout="wide")
+st.set_page_config(page_title="Web Terminal", layout="wide")
 
-st.title("💻 Code-Server Web IDE")
-st.write("Install and run code-server on port 7000")
+st.title("💻 Web Terminal (Full Access)")
+st.write("Run Linux commands (private use only)")
 
-# Store logs
-if "logs" not in st.session_state:
-    st.session_state.logs = ""
+# Session state
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-# Install code-server
-if st.button("Install code-server"):
-    try:
-        install_cmd = "curl -fsSL https://code-server.dev/install.sh | sh"
-        result = subprocess.run(install_cmd, shell=True, capture_output=True, text=True)
-        st.session_state.logs += result.stdout + result.stderr
-        st.success("code-server installed successfully")
-    except Exception as e:
-        st.error(str(e))
+if "cwd" not in st.session_state:
+    st.session_state.cwd = os.getcwd()
 
-# Run code-server
-if st.button("Start code-server (port 7000)"):
-    try:
-        run_cmd = "code-server --bind-addr 0.0.0.0:7000 > code-server.log 2>&1 &"
-        subprocess.run(run_cmd, shell=True)
+# Show current directory
+st.info(f"📂 Current Directory: {st.session_state.cwd}")
 
-        st.success("code-server started on port 7000")
+# Input
+command = st.text_input("Enter Linux command:")
 
-        # Read password file
-        password_cmd = "cat ~/.config/code-server/config.yaml"
-        result = subprocess.run(password_cmd, shell=True, capture_output=True, text=True)
+# Run command
+if st.button("Run Command"):
+    if command.strip() == "":
+        st.warning("Please enter a command")
+    else:
+        try:
+            # Handle cd separately
+            if command.startswith("cd "):
+                path = command.replace("cd ", "").strip()
+                new_path = os.path.abspath(os.path.join(st.session_state.cwd, path))
+                
+                if os.path.isdir(new_path):
+                    st.session_state.cwd = new_path
+                    output = f"Changed directory to {new_path}"
+                else:
+                    output = f"No such directory: {path}"
 
-        st.session_state.logs += result.stdout
+            else:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=st.session_state.cwd,
+                    capture_output=True,
+                    text=True
+                )
 
-    except Exception as e:
-        st.error(str(e))
+                output = ""
+                if result.stdout:
+                    output += result.stdout
+                if result.stderr:
+                    output += result.stderr
 
-# Show logs / password
-st.subheader("📄 Logs & Password Info")
-if st.session_state.logs:
-    st.code(st.session_state.logs, language="bash")
+                if output.strip() == "":
+                    output = "[No output]"
+
+            # Save history
+            st.session_state.history.append({
+                "command": command,
+                "output": output
+            })
+
+        except Exception as e:
+            st.error(str(e))
+
+# Output display
+st.subheader("📄 Terminal Output")
+
+if st.session_state.history:
+    for item in reversed(st.session_state.history):
+        st.code(f"$ {item['command']}\n{item['output']}", language="bash")
 else:
-    st.write("No logs yet")
+    st.write("No commands run yet.")
 
-# Show access info
-st.subheader("🌐 Access Info")
-st.info("Open in browser: http://YOUR_SERVER_IP:7000")
+# Clear history
+if st.button("Clear History"):
+    st.session_state.history = []
