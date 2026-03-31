@@ -4,147 +4,145 @@ import os
 
 st.set_page_config(page_title="Web Terminal", layout="wide")
 
-# Session state
+# ---------------- STATE ----------------
 if "history" not in st.session_state:
     st.session_state.history = []
 
 if "cwd" not in st.session_state:
     st.session_state.cwd = os.getcwd()
 
-# Dark mode toggle (moved from sidebar to main area)
-dark_mode = st.checkbox("🌙 Dark Mode", value=False)
-if dark_mode:
-    st.markdown(
-        """
-        <style>
-        /* Global dark theme overrides */
-        .stApp {
-            background-color: #0e1117;
-            color: #fafafa;
-        }
-        /* Terminal output area */
-        .terminal-container {
-            background-color: #1e1e2e;
-            border-radius: 8px;
-            padding: 1rem;
-            font-family: monospace;
-            color: #f8f8f2;
-            border: 1px solid #3a3a4a;
-            overflow-y: auto;
-            height: 400px;
-        }
-        .stCodeBlock {
-            background-color: #282a36 !important;
-        }
-        /* Info box */
-        .stAlert {
-            background-color: #2d2f3a !important;
-            color: #f8f8f2 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+# ---------------- STYLE ----------------
+st.markdown("""
+<style>
+.main-container {
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
 
-st.title("💻 Web Terminal (Full Access)")
-st.write("Run Linux commands (private use only)")
+/* Terminal box */
+.terminal-box {
+    flex-grow: 1;
+    background-color: #0d1117;
+    color: #c9d1d9;
+    font-family: monospace;
+    padding: 20px;
+    border-radius: 10px;
+    overflow-y: auto;
+    border: 1px solid #30363d;
+}
 
-# Show current directory
-st.info(f"📂 Current Directory: {st.session_state.cwd}")
+/* Prompt */
+.prompt {
+    color: #58a6ff;
+}
 
-# -------------------------------------------------------------------
-# Terminal display area (with auto‑scroll)
-# Build the terminal content as a single block of text
-terminal_content = ""
-for item in st.session_state.history:
-    terminal_content += f"$ {item['command']}\n{item['output']}\n"
+/* Command text */
+.cmd {
+    color: #ffffff;
+}
 
-# Wrap in a scrollable div with a fixed height and monospace font
-st.markdown(
-    f"""
-    <div id="terminal-output" class="terminal-container" style="
-        background-color: {'#1e1e2e' if dark_mode else '#f0f2f6'};
-        color: {'#f8f8f2' if dark_mode else '#000000'};
-        border: 1px solid {'#3a3a4a' if dark_mode else '#dddddd'};
-        font-family: monospace;
-        font-size: 14px;
-        padding: 10px;
-        border-radius: 8px;
-        overflow-y: auto;
-        height: 400px;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-    ">
-    {terminal_content if terminal_content else "No commands run yet. Type a command below and press Enter."}
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+/* Output */
+.output {
+    color: #8b949e;
+    margin-bottom: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# JavaScript to auto‑scroll to bottom (runs after each rerun)
-st.markdown(
-    """
-    <script>
-    (function() {
-        var terminalDiv = document.getElementById('terminal-output');
-        if (terminalDiv) {
-            terminalDiv.scrollTop = terminalDiv.scrollHeight;
-        }
-    })();
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
+# ---------------- BUILT-IN COMMANDS ----------------
+def run_command(command):
+    if command == "clear":
+        st.session_state.history = []
+        return None
 
-# -------------------------------------------------------------------
-# Terminal input – behaves like a real terminal: press Enter to run
-command = st.chat_input("Enter Linux command...")
+    if command == "help":
+        return """Available commands:
+- help
+- clear
+- ls, pwd, cd (real commands supported)
+"""
 
-if command:
     try:
-        # Handle cd separately to update session cwd
         if command.startswith("cd "):
-            path = command.replace("cd ", "").strip()
+            path = command[3:].strip()
             new_path = os.path.abspath(os.path.join(st.session_state.cwd, path))
 
             if os.path.isdir(new_path):
                 st.session_state.cwd = new_path
-                output = f"Changed directory to {new_path}"
+                return f"Changed directory to {new_path}"
             else:
-                output = f"No such directory: {path}"
+                return f"No such directory: {path}"
 
-        else:
-            result = subprocess.run(
-                command,
-                shell=True,
-                cwd=st.session_state.cwd,
-                capture_output=True,
-                text=True
-            )
+        result = subprocess.run(
+            command,
+            shell=True,
+            cwd=st.session_state.cwd,
+            capture_output=True,
+            text=True
+        )
 
-            output = ""
-            if result.stdout:
-                output += result.stdout
-            if result.stderr:
-                output += result.stderr
-
-            if output.strip() == "":
-                output = "[No output]"
-
-        # Save to history
-        st.session_state.history.append({
-            "command": command,
-            "output": output
-        })
-
-        # Force rerun to display new output and trigger auto‑scroll
-        st.rerun()
+        output = result.stdout + result.stderr
+        return output if output.strip() else "[No output]"
 
     except Exception as e:
-        st.error(str(e))
+        return str(e)
 
-# -------------------------------------------------------------------
-# Clear history button (unchanged)
-if st.button("Clear History"):
-    st.session_state.history = []
-    st.rerun()
+# ---------------- TERMINAL DISPLAY ----------------
+terminal_html = ""
+
+for item in st.session_state.history:
+    terminal_html += f"""
+    <div>
+        <span class="prompt">visitor@terminal:{st.session_state.cwd}$</span>
+        <span class="cmd"> {item['command']}</span>
+    </div>
+    <div class="output">{item['output']}</div>
+    """
+
+# Layout container
+st.markdown('<div class="main-container">', unsafe_allow_html=True)
+
+# Terminal output box
+st.markdown(f"""
+<div class="terminal-box" id="terminal">
+{terminal_html if terminal_html else "Welcome to Web Terminal\nType 'help' to start\n"}
+</div>
+""", unsafe_allow_html=True)
+
+# Auto-scroll
+st.markdown("""
+<script>
+var term = document.getElementById("terminal");
+if (term) {
+    term.scrollTop = term.scrollHeight;
+}
+</script>
+""", unsafe_allow_html=True)
+
+# ---------------- INPUT (BOTTOM LIKE REAL TERMINAL) ----------------
+with st.form(key="terminal_form", clear_on_submit=True):
+    cols = st.columns([8, 1])
+
+    with cols[0]:
+        command = st.text_input(
+            "",
+            placeholder="visitor@terminal:~$ type command...",
+            label_visibility="collapsed"
+        )
+
+    with cols[1]:
+        submit = st.form_submit_button("Enter")
+
+    if submit and command:
+        output = run_command(command)
+
+        if output is not None:
+            st.session_state.history.append({
+                "command": command,
+                "output": output
+            })
+
+        st.rerun()
+
+st.markdown('</div>', unsafe_allow_html=True)
