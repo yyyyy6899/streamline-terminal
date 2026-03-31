@@ -4,6 +4,44 @@ import os
 
 st.set_page_config(page_title="Web Terminal", layout="wide")
 
+# -------------------------------------------------------------------
+# Sidebar for dark mode toggle
+with st.sidebar:
+    dark_mode = st.toggle("🌙 Dark Mode", key="dark_mode")
+    if dark_mode:
+        st.markdown(
+            """
+            <style>
+            /* Global dark theme overrides */
+            .stApp {
+                background-color: #0e1117;
+                color: #fafafa;
+            }
+            /* Terminal output area */
+            .terminal-container {
+                background-color: #1e1e2e;
+                border-radius: 8px;
+                padding: 1rem;
+                font-family: monospace;
+                color: #f8f8f2;
+            }
+            .stCodeBlock {
+                background-color: #282a36 !important;
+            }
+            /* Sidebar background */
+            section[data-testid="stSidebar"] {
+                background-color: #1e1e2e;
+            }
+            /* Info box */
+            .stAlert {
+                background-color: #2d2f3a !important;
+                color: #f8f8f2 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
 st.title("💻 Web Terminal (Full Access)")
 st.write("Run Linux commands (private use only)")
 
@@ -17,7 +55,7 @@ if "cwd" not in st.session_state:
 # Show current directory
 st.info(f"📂 Current Directory: {st.session_state.cwd}")
 
-# ===== Button to install tmate =====
+# ===== Button to install tmate (unchanged) =====
 if st.button("Install tmate"):
     try:
         st.info("Installing tmate... (requires sudo, you may be prompted for password)")
@@ -33,61 +71,70 @@ if st.button("Install tmate"):
     except Exception as e:
         st.error(f"Failed to install tmate: {e}")
 
-# ===== Terminal input =====
-command = st.text_input("Enter Linux command:")
+# -------------------------------------------------------------------
+# Terminal-like input and output area
+st.markdown("### 📟 Terminal")
 
-# Run command
-if st.button("Run Command"):
-    if command.strip() == "":
-        st.warning("Please enter a command")
+# Container for scrollable terminal output (fixed height, border)
+terminal_container = st.container(height=400, border=True)
+
+# Display terminal history in order (oldest first)
+with terminal_container:
+    if st.session_state.history:
+        for item in st.session_state.history:
+            st.code(f"$ {item['command']}\n{item['output']}", language="bash")
     else:
-        try:
-            # Handle cd separately
-            if command.startswith("cd "):
-                path = command.replace("cd ", "").strip()
-                new_path = os.path.abspath(os.path.join(st.session_state.cwd, path))
-                
-                if os.path.isdir(new_path):
-                    st.session_state.cwd = new_path
-                    output = f"Changed directory to {new_path}"
-                else:
-                    output = f"No such directory: {path}"
+        st.write("No commands run yet. Type a command below and press Enter.")
 
+# Chat input for commands – behaves like a terminal: press Enter to run
+command = st.chat_input("Enter Linux command...")
+
+if command:
+    # Process the command
+    try:
+        # Handle cd separately to update session cwd
+        if command.startswith("cd "):
+            path = command.replace("cd ", "").strip()
+            new_path = os.path.abspath(os.path.join(st.session_state.cwd, path))
+
+            if os.path.isdir(new_path):
+                st.session_state.cwd = new_path
+                output = f"Changed directory to {new_path}"
             else:
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    cwd=st.session_state.cwd,
-                    capture_output=True,
-                    text=True
-                )
+                output = f"No such directory: {path}"
 
-                output = ""
-                if result.stdout:
-                    output += result.stdout
-                if result.stderr:
-                    output += result.stderr
+        else:
+            result = subprocess.run(
+                command,
+                shell=True,
+                cwd=st.session_state.cwd,
+                capture_output=True,
+                text=True
+            )
 
-                if output.strip() == "":
-                    output = "[No output]"
+            output = ""
+            if result.stdout:
+                output += result.stdout
+            if result.stderr:
+                output += result.stderr
 
-            # Save history
-            st.session_state.history.append({
-                "command": command,
-                "output": output
-            })
+            if output.strip() == "":
+                output = "[No output]"
 
-        except Exception as e:
-            st.error(str(e))
+        # Save to history
+        st.session_state.history.append({
+            "command": command,
+            "output": output
+        })
 
-# Output display
-st.subheader("📄 Terminal Output")
-if st.session_state.history:
-    for item in reversed(st.session_state.history):
-        st.code(f"$ {item['command']}\n{item['output']}", language="bash")
-else:
-    st.write("No commands run yet.")
+        # Force a rerun so the new output appears instantly
+        st.rerun()
 
-# Clear history
+    except Exception as e:
+        st.error(str(e))
+
+# -------------------------------------------------------------------
+# Clear history button (unchanged)
 if st.button("Clear History"):
     st.session_state.history = []
+    st.rerun()
