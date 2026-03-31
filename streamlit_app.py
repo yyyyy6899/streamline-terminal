@@ -2,147 +2,139 @@ import streamlit as st
 import subprocess
 import os
 
-st.set_page_config(page_title="Web Terminal", layout="wide")
+st.set_page_config(page_title="Terminal Portfolio", layout="wide")
 
-# ---------------- STATE ----------------
+# ---------------------- SESSION STATE ----------------------
 if "history" not in st.session_state:
     st.session_state.history = []
 
 if "cwd" not in st.session_state:
     st.session_state.cwd = os.getcwd()
 
-# ---------------- STYLE ----------------
+# ---------------------- STYLES ----------------------
 st.markdown("""
 <style>
-.main-container {
-    height: 90vh;
-    display: flex;
-    flex-direction: column;
+body {
+    background-color: #0d1117;
 }
-
-/* Terminal box */
-.terminal-box {
-    flex-grow: 1;
+.terminal {
     background-color: #0d1117;
     color: #c9d1d9;
     font-family: monospace;
     padding: 20px;
     border-radius: 10px;
+    height: 500px;
     overflow-y: auto;
     border: 1px solid #30363d;
 }
-
-/* Prompt */
 .prompt {
     color: #58a6ff;
 }
-
-/* Command text */
-.cmd {
-    color: #ffffff;
+.command {
+    color: #c9d1d9;
 }
-
-/* Output */
 .output {
     color: #8b949e;
-    margin-bottom: 10px;
+}
+.title {
+    color: #58a6ff;
+    font-size: 22px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- BUILT-IN COMMANDS ----------------
-def run_command(command):
-    if command == "clear":
-        st.session_state.history = []
-        return None
-
-    if command == "help":
-        return """Available commands:
-- help
-- clear
-- ls, pwd, cd (real commands supported)
+# ---------------------- ASCII HEADER ----------------------
+header = r"""
+  _____       _   _       _             
+ / ____|     | | (_)     | |            
+| (___   __ _| |_ _ _ __ | | ___   __ _ 
+ \___ \ / _` | __| | '_ \| |/ _ \ / _` |
+ ____) | (_| | |_| | | | | | (_) | (_| |
+|_____/ \__,_|\__|_|_| |_|_|\___/ \__, |
+                                   __/ |
+                                  |___/ 
 """
 
-    try:
-        if command.startswith("cd "):
-            path = command[3:].strip()
-            new_path = os.path.abspath(os.path.join(st.session_state.cwd, path))
+# ---------------------- BUILT-IN COMMANDS ----------------------
+def handle_builtin(cmd):
+    if cmd == "help":
+        return """Available commands:
+- help     → show this message
+- about    → about me
+- clear    → clear terminal
+- ls, pwd, cd → system commands supported
+"""
+    elif cmd == "about":
+        return """Hi, my name is Your Name!
+I'm a full-stack developer.
+I build terminal-style web apps and cool UI projects."""
+    elif cmd == "clear":
+        st.session_state.history = []
+        st.rerun()
+    return None
 
-            if os.path.isdir(new_path):
-                st.session_state.cwd = new_path
-                return f"Changed directory to {new_path}"
-            else:
-                return f"No such directory: {path}"
-
-        result = subprocess.run(
-            command,
-            shell=True,
-            cwd=st.session_state.cwd,
-            capture_output=True,
-            text=True
-        )
-
-        output = result.stdout + result.stderr
-        return output if output.strip() else "[No output]"
-
-    except Exception as e:
-        return str(e)
-
-# ---------------- TERMINAL DISPLAY ----------------
-terminal_html = ""
+# ---------------------- TERMINAL OUTPUT ----------------------
+terminal_content = f"<pre class='output'>{header}\nWelcome to my terminal portfolio.\nType 'help' to get started.\n\n</pre>"
 
 for item in st.session_state.history:
-    terminal_html += f"""
+    terminal_content += f"""
     <div>
-        <span class="prompt">visitor@terminal:{st.session_state.cwd}$</span>
-        <span class="cmd"> {item['command']}</span>
+        <span class="prompt">visitor@web-terminal:~$</span>
+        <span class="command">{item['command']}</span>
     </div>
-    <div class="output">{item['output']}</div>
+    <pre class="output">{item['output']}</pre>
     """
 
-# Layout container
-st.markdown('<div class="main-container">', unsafe_allow_html=True)
+st.markdown(f"<div class='terminal' id='terminal'>{terminal_content}</div>", unsafe_allow_html=True)
 
-# Terminal output box
-st.markdown(f"""
-<div class="terminal-box" id="terminal">
-{terminal_html if terminal_html else "Welcome to Web Terminal\nType 'help' to start\n"}
-</div>
-""", unsafe_allow_html=True)
-
-# Auto-scroll
+# Auto scroll
 st.markdown("""
 <script>
-var term = document.getElementById("terminal");
-if (term) {
-    term.scrollTop = term.scrollHeight;
+var terminal = document.getElementById("terminal");
+if (terminal) {
+    terminal.scrollTop = terminal.scrollHeight;
 }
 </script>
 """, unsafe_allow_html=True)
 
-# ---------------- INPUT (BOTTOM LIKE REAL TERMINAL) ----------------
-with st.form(key="terminal_form", clear_on_submit=True):
-    cols = st.columns([8, 1])
+# ---------------------- INPUT ----------------------
+command = st.text_input("visitor@web-terminal:~$", key="input")
 
-    with cols[0]:
-        command = st.text_input(
-            "",
-            placeholder="visitor@terminal:~$ type command...",
-            label_visibility="collapsed"
-        )
+if command:
+    command = command.strip()
 
-    with cols[1]:
-        submit = st.form_submit_button("Enter")
+    # Built-in commands
+    built_in = handle_builtin(command)
 
-    if submit and command:
-        output = run_command(command)
+    if built_in is not None:
+        output = built_in
+    else:
+        try:
+            if command.startswith("cd "):
+                path = command[3:].strip()
+                new_path = os.path.abspath(os.path.join(st.session_state.cwd, path))
+                if os.path.isdir(new_path):
+                    st.session_state.cwd = new_path
+                    output = f"Changed directory to {new_path}"
+                else:
+                    output = f"No such directory: {path}"
+            else:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=st.session_state.cwd,
+                    capture_output=True,
+                    text=True
+                )
+                output = result.stdout + result.stderr
+                if output.strip() == "":
+                    output = "[No output]"
+        except Exception as e:
+            output = str(e)
 
-        if output is not None:
-            st.session_state.history.append({
-                "command": command,
-                "output": output
-            })
+    st.session_state.history.append({
+        "command": command,
+        "output": output
+    })
 
-        st.rerun()
-
-st.markdown('</div>', unsafe_allow_html=True)
+    st.rerun()
