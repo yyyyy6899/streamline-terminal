@@ -2,139 +2,139 @@ import streamlit as st
 import subprocess
 import os
 
-st.set_page_config(page_title="Terminal Portfolio", layout="wide")
+st.set_page_config(page_title="Web Terminal", layout="wide")
 
-# ---------------------- SESSION STATE ----------------------
+# -------------------------------------------------------------------
+# Sidebar for dark mode toggle
+with st.sidebar:
+    dark_mode = st.toggle("🌙 Dark Mode", key="dark_mode")
+    if dark_mode:
+        st.markdown(
+            """
+            <style>
+            /* Global dark theme overrides */
+            .stApp {
+                background-color: #0e1117;
+                color: #fafafa;
+            }
+            /* Terminal output area */
+            .terminal-container {
+                background-color: #1e1e2e;
+                border-radius: 8px;
+                padding: 1rem;
+                font-family: monospace;
+                color: #f8f8f2;
+            }
+            .stCodeBlock {
+                background-color: #282a36 !important;
+            }
+            /* Sidebar background */
+            section[data-testid="stSidebar"] {
+                background-color: #1e1e2e;
+            }
+            /* Info box */
+            .stAlert {
+                background-color: #2d2f3a !important;
+                color: #f8f8f2 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+st.title("💻 Web Terminal (Full Access)")
+st.write("Run Linux commands (private use only)")
+
+# Session state
 if "history" not in st.session_state:
     st.session_state.history = []
 
 if "cwd" not in st.session_state:
     st.session_state.cwd = os.getcwd()
 
-# ---------------------- STYLES ----------------------
-st.markdown("""
-<style>
-body {
-    background-color: #0d1117;
-}
-.terminal {
-    background-color: #0d1117;
-    color: #c9d1d9;
-    font-family: monospace;
-    padding: 20px;
-    border-radius: 10px;
-    height: 500px;
-    overflow-y: auto;
-    border: 1px solid #30363d;
-}
-.prompt {
-    color: #58a6ff;
-}
-.command {
-    color: #c9d1d9;
-}
-.output {
-    color: #8b949e;
-}
-.title {
-    color: #58a6ff;
-    font-size: 22px;
-}
-</style>
-""", unsafe_allow_html=True)
+# Show current directory
+st.info(f"📂 Current Directory: {st.session_state.cwd}")
 
-# ---------------------- ASCII HEADER ----------------------
-header = r"""
-  _____       _   _       _             
- / ____|     | | (_)     | |            
-| (___   __ _| |_ _ _ __ | | ___   __ _ 
- \___ \ / _` | __| | '_ \| |/ _ \ / _` |
- ____) | (_| | |_| | | | | | (_) | (_| |
-|_____/ \__,_|\__|_|_| |_|_|\___/ \__, |
-                                   __/ |
-                                  |___/ 
-"""
+# ===== Button to install tmate (unchanged) =====
+if st.button("Install tmate"):
+    try:
+        st.info("Installing tmate... (requires sudo, you may be prompted for password)")
+        result = subprocess.run(
+            "sudo apt update && sudo apt install -y tmate",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        output = result.stdout if result.stdout else result.stderr
+        st.code(output, language="bash")
+        st.success("tmate installation finished.")
+    except Exception as e:
+        st.error(f"Failed to install tmate: {e}")
 
-# ---------------------- BUILT-IN COMMANDS ----------------------
-def handle_builtin(cmd):
-    if cmd == "help":
-        return """Available commands:
-- help     → show this message
-- about    → about me
-- clear    → clear terminal
-- ls, pwd, cd → system commands supported
-"""
-    elif cmd == "about":
-        return """Hi, my name is Your Name!
-I'm a full-stack developer.
-I build terminal-style web apps and cool UI projects."""
-    elif cmd == "clear":
-        st.session_state.history = []
-        st.rerun()
-    return None
+# -------------------------------------------------------------------
+# Terminal-like input and output area
+st.markdown("### 📟 Terminal")
 
-# ---------------------- TERMINAL OUTPUT ----------------------
-terminal_content = f"<pre class='output'>{header}\nWelcome to my terminal portfolio.\nType 'help' to get started.\n\n</pre>"
+# Container for scrollable terminal output (fixed height, border)
+terminal_container = st.container(height=400, border=True)
 
-for item in st.session_state.history:
-    terminal_content += f"""
-    <div>
-        <span class="prompt">visitor@web-terminal:~$</span>
-        <span class="command">{item['command']}</span>
-    </div>
-    <pre class="output">{item['output']}</pre>
-    """
+# Display terminal history in order (oldest first)
+with terminal_container:
+    if st.session_state.history:
+        for item in st.session_state.history:
+            st.code(f"$ {item['command']}\n{item['output']}", language="bash")
+    else:
+        st.write("No commands run yet. Type a command below and press Enter.")
 
-st.markdown(f"<div class='terminal' id='terminal'>{terminal_content}</div>", unsafe_allow_html=True)
-
-# Auto scroll
-st.markdown("""
-<script>
-var terminal = document.getElementById("terminal");
-if (terminal) {
-    terminal.scrollTop = terminal.scrollHeight;
-}
-</script>
-""", unsafe_allow_html=True)
-
-# ---------------------- INPUT ----------------------
-command = st.text_input("visitor@web-terminal:~$", key="input")
+# Chat input for commands – behaves like a terminal: press Enter to run
+command = st.chat_input("Enter Linux command...")
 
 if command:
-    command = command.strip()
+    # Process the command
+    try:
+        # Handle cd separately to update session cwd
+        if command.startswith("cd "):
+            path = command.replace("cd ", "").strip()
+            new_path = os.path.abspath(os.path.join(st.session_state.cwd, path))
 
-    # Built-in commands
-    built_in = handle_builtin(command)
-
-    if built_in is not None:
-        output = built_in
-    else:
-        try:
-            if command.startswith("cd "):
-                path = command[3:].strip()
-                new_path = os.path.abspath(os.path.join(st.session_state.cwd, path))
-                if os.path.isdir(new_path):
-                    st.session_state.cwd = new_path
-                    output = f"Changed directory to {new_path}"
-                else:
-                    output = f"No such directory: {path}"
+            if os.path.isdir(new_path):
+                st.session_state.cwd = new_path
+                output = f"Changed directory to {new_path}"
             else:
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    cwd=st.session_state.cwd,
-                    capture_output=True,
-                    text=True
-                )
-                output = result.stdout + result.stderr
-                if output.strip() == "":
-                    output = "[No output]"
-        except Exception as e:
-            output = str(e)
+                output = f"No such directory: {path}"
 
-    st.session_state.history.append({
-        "command": command,
-        "output": output
-    })
+        else:
+            result = subprocess.run(
+                command,
+                shell=True,
+                cwd=st.session_state.cwd,
+                capture_output=True,
+                text=True
+            )
 
+            output = ""
+            if result.stdout:
+                output += result.stdout
+            if result.stderr:
+                output += result.stderr
+
+            if output.strip() == "":
+                output = "[No output]"
+
+        # Save to history
+        st.session_state.history.append({
+            "command": command,
+            "output": output
+        })
+
+        # Force a rerun so the new output appears instantly
+        st.rerun()
+
+    except Exception as e:
+        st.error(str(e))
+
+# -------------------------------------------------------------------
+# Clear history button (unchanged)
+if st.button("Clear History"):
+    st.session_state.history = []
     st.rerun()
